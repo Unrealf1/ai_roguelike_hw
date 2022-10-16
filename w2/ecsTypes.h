@@ -104,6 +104,7 @@ struct Symbol
 };
 
 struct IsPlayer {};
+struct CanPickup {};
 
 struct Team
 {

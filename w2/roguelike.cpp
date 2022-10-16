@@ -25,7 +25,31 @@ static void create_minotaur_beh(flecs::entity e)
   e.set(BehaviourTree{root});
 }
 
-static flecs::entity create_monster(flecs::world &ecs, int x, int y, Color col, const char *texture_src)
+static void create_gatherer_beh(flecs::entity e, const flecs::world& ecs)
+{
+  e.set(Blackboard{});
+  e.set(BehaviourTree{
+    selector({
+      sequence({
+        find_enemy(e, 2.f, "attack_enemy"),
+        move_to_entity(e, "attack_enemy")
+      }), // if enemy is close
+      sequence({
+        selector({
+          find_powerup(ecs, e, 100.f, "gather_bonus"),
+          find_heal(ecs, e, 100.f, "gather_bonus")
+        }),
+        move_to_entity(e, "gather_bonus")
+      }), // if there's bonus to gather
+      sequence({
+        find_enemy(e, 200.f, "attack_enemy"),
+        move_to_entity(e, "attack_enemy")
+      })
+    }) // root selector
+  });
+}
+
+static flecs::entity create_npc(flecs::world &ecs, int x, int y, Color col, const char *texture_src, int team)
 {
   flecs::entity textureSrc = ecs.entity(texture_src);
   return ecs.entity()
@@ -36,10 +60,24 @@ static flecs::entity create_monster(flecs::world &ecs, int x, int y, Color col, 
     .set(Color{col})
     .add<TextureSource>(textureSrc)
     .set(StateMachine{})
-    .set(Team{1})
+    .set(Team{team})
     .set(NumActions{1, 0})
     .set(MeleeDamage{20.f})
     .set(Blackboard{});
+}
+static flecs::entity create_monster(flecs::world &ecs, int x, int y, Color col, const char *texture_src)
+{
+  return create_npc(ecs, x, y, col, texture_src, 1);
+}
+static flecs::entity create_ally(flecs::world &ecs, int x, int y, Color col, const char *texture_src)
+{
+  return create_npc(ecs, x, y, col, texture_src, 0);
+}
+
+static flecs::entity create_gatherer(flecs::world &ecs, int x, int y, Color col, const char *texture_src)
+{
+  return create_ally(ecs, x, y, col, texture_src)
+    .add<CanPickup>();
 }
 
 static void create_player(flecs::world &ecs, int x, int y, const char *texture_src)
@@ -52,6 +90,7 @@ static void create_player(flecs::world &ecs, int x, int y, const char *texture_s
     //.set(Color{0xee, 0xee, 0xee, 0xff})
     .set(Action{EA_NOP})
     .add<IsPlayer>()
+    .add<CanPickup>()
     .set(Team{0})
     .set(PlayerInput{})
     .set(NumActions{2, 0})
@@ -137,6 +176,8 @@ void init_roguelike(flecs::world &ecs)
   create_minotaur_beh(create_monster(ecs, 10, -5, Color{0xee, 0x00, 0xee, 0xff}, "minotaur_tex"));
   create_minotaur_beh(create_monster(ecs, -5, -5, Color{0x11, 0x11, 0x11, 0xff}, "minotaur_tex"));
   create_minotaur_beh(create_monster(ecs, -5, 5, Color{0, 255, 0, 255}, "minotaur_tex"));
+  
+  create_gatherer_beh(create_gatherer(ecs, -3, 3, Color{255, 255, 255, 255}, "swordsman_tex"), ecs);
 
   create_player(ecs, 0, 0, "swordsman_tex");
 
@@ -227,12 +268,12 @@ static void process_actions(flecs::world &ecs)
     });
   });
 
-  static auto playerPickup = ecs.query<const IsPlayer, const Position, Hitpoints, MeleeDamage>();
+  static auto pickuppers = ecs.query<const CanPickup, const Position, Hitpoints, MeleeDamage>();
   static auto healPickup = ecs.query<const Position, const HealAmount>();
   static auto powerupPickup = ecs.query<const Position, const PowerupAmount>();
   ecs.defer([&]
   {
-    playerPickup.each([&](const IsPlayer&, const Position &pos, Hitpoints &hp, MeleeDamage &dmg)
+    pickuppers.each([&](const CanPickup&, const Position &pos, Hitpoints &hp, MeleeDamage &dmg)
     {
       healPickup.each([&](flecs::entity entity, const Position &ppos, const HealAmount &amt)
       {

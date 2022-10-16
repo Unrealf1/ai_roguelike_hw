@@ -1,6 +1,7 @@
 #include "aiLibrary.h"
 #include "ecsTypes.h"
 #include "aiUtils.h"
+#include "flecs/addons/cpp/mixins/query/impl.hpp"
 #include "math.h"
 #include "raylib.h"
 #include "blackboard.h"
@@ -10,6 +11,9 @@
 struct CompoundNode : public BehNode
 {
   std::vector<BehNode*> nodes;
+
+  CompoundNode(std::vector<BehNode*> nodes) : nodes(std::move(nodes)) {}
+  CompoundNode() = default;
 
   virtual ~CompoundNode()
   {
@@ -71,8 +75,9 @@ struct Selector : public CompoundNode
 // Run all children one by one
 // fail on all fail
 // success on any success
-struct Or : public CompoundNode
+struct OrNode : public CompoundNode
 {
+  using CompoundNode::CompoundNode;
   BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
   {
     bool anySuccess = false;
@@ -94,6 +99,7 @@ struct Or : public CompoundNode
 // success on all success; fail on any fail
 struct Parallel : public CompoundNode
 {
+  using CompoundNode::CompoundNode;
   BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
   {
     bool allSuccess = true;
@@ -116,7 +122,8 @@ struct Parallel : public CompoundNode
   }
 };
 
-struct Not : public FixedArityCompoundNode<1> {
+struct NotNode : public FixedArityCompoundNode<1> {
+  using FixedArityCompoundNode::FixedArityCompoundNode;
   BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override {
     auto res = m_children.front()->update(ecs, entity, bb);
     if (res == BEH_FAIL) {
@@ -176,6 +183,48 @@ struct IsLowHp : public BehNode
     });
     return res;
   }
+};
+
+template<typename... QueryTypes>
+struct FindClosestOf : public BehNode
+{
+  using Query = flecs::query<Position, QueryTypes...>;
+
+  size_t entityBb = size_t(-1);
+  float distance = 0;
+  const Query m_query;
+  FindClosestOf(flecs::entity entity, float in_dist, const char *bb_name, const Query& query) 
+      : distance(in_dist), m_query(query)
+  {
+    entityBb = reg_entity_blackboard_var<flecs::entity>(entity, bb_name);
+  }
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+    BehResult res = BEH_FAIL;
+    entity.set([&](const Position &pos)
+    {
+      flecs::entity closest;
+      float closestDist = FLT_MAX;
+      Position closestPos;
+      m_query.each([&](flecs::entity e, const Position &other_pos, const QueryTypes&...)
+      {
+        float curDist = dist(other_pos, pos);
+        if (curDist < closestDist)
+        {
+          closestDist = curDist;
+          closestPos = other_pos;
+          closest = e;
+        }
+      });
+      if (ecs.is_valid(closest) && closestDist <= distance)
+      {
+        bb.set<flecs::entity>(entityBb, closest);
+        res = BEH_SUCCESS;
+      }
+    });
+    return res;
+  }
+
 };
 
 struct FindEnemy : public BehNode
@@ -291,6 +340,21 @@ BehNode *selector(const std::vector<BehNode*> &nodes)
   return sel;
 }
 
+BehNode *or_node(const std::vector<BehNode*> &nodes)
+{
+  return new OrNode(nodes);
+}
+
+BehNode *not_node(BehNode* node)
+{
+    return new NotNode({std::unique_ptr<BehNode>(node)});
+}
+
+BehNode *parallel(const std::vector<BehNode*> &nodes)
+{
+    return new Parallel(nodes);
+}
+
 BehNode *move_to_entity(flecs::entity entity, const char *bb_name)
 {
   return new MoveToEntity(entity, bb_name);
@@ -304,6 +368,18 @@ BehNode *is_low_hp(float thres)
 BehNode *find_enemy(flecs::entity entity, float dist, const char *bb_name)
 {
   return new FindEnemy(entity, dist, bb_name);
+}
+
+BehNode *find_powerup(const flecs::world& ecs, flecs::entity entity, float dist, const char *bb_name)
+{
+  static const auto query = ecs.query<Position, PowerupAmount>();
+  return new FindClosestOf(entity, dist, bb_name, query);
+}
+
+BehNode *find_heal(const flecs::world& ecs, flecs::entity entity, float dist, const char *bb_name)
+{
+  static const auto query = ecs.query<Position, HealAmount>();
+  return new FindClosestOf(entity, dist, bb_name, query);
 }
 
 BehNode *flee(flecs::entity entity, const char *bb_name)
