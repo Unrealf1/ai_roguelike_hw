@@ -48,6 +48,21 @@ static void create_gatherer_beh(flecs::entity e, const flecs::world& ecs)
     }) // root selector
   });
 }
+static void create_guard_beh(flecs::entity e, const flecs::world& ecs)
+{
+  e.set(Blackboard{});
+  e.set(BehaviourTree{
+    selector({
+      sequence({
+        selector({
+          find_enemy(e, 3.f, "chosen entity"),
+          find_waypoint(e, "chosen entity")
+        }),
+        move_to_entity(e, "chosen entity")
+      })
+    }) // root selector
+  });
+}
 
 static flecs::entity create_npc(flecs::world &ecs, int x, int y, Color col, const char *texture_src, int team)
 {
@@ -80,6 +95,39 @@ static flecs::entity create_gatherer(flecs::world &ecs, int x, int y, Color col,
     .add<CanPickup>();
 }
 
+static void create_powerup(flecs::world &ecs, int x, int y, float amount)
+{
+  ecs.entity()
+    .set(Position{x, y})
+    .set(PowerupAmount{amount})
+    .set(Color{0xff, 0xff, 0x00, 0xff});
+}
+static flecs::entity generate_waypoints(flecs::world &ecs, const auto& container, bool cycle) {
+  flecs::entity last{};
+  flecs::entity first{};
+  for (size_t i = 0; i < container.size(); ++i) {
+    auto [x, y] = container[i];
+    auto current = ecs.entity()
+      .set(Position{x, y});
+    if (i == 0) {
+      first = current;
+    } else {
+      last.set(NextWaypoint{current});
+    }
+    last = current;
+  }
+  if (cycle) {
+    last.set(NextWaypoint{first});
+  }
+  return first;
+}
+
+static flecs::entity create_guard(flecs::world &ecs, int x, int y, Color col, const char *texture_src, const std::vector<std::pair<int, int>>& waypoints)
+{
+  return create_ally(ecs, x, y, col, texture_src)
+    .set(CurrentWaypoint({generate_waypoints(ecs, waypoints, true)}));
+}
+
 static void create_player(flecs::world &ecs, int x, int y, const char *texture_src)
 {
   flecs::entity textureSrc = ecs.entity(texture_src);
@@ -107,14 +155,6 @@ static void create_heal(flecs::world &ecs, int x, int y, float amount)
     .set(Color{0xff, 0x44, 0x44, 0xff});
 }
 
-static void create_powerup(flecs::world &ecs, int x, int y, float amount)
-{
-  ecs.entity()
-    .set(Position{x, y})
-    .set(PowerupAmount{amount})
-    .set(Color{0xff, 0xff, 0x00, 0xff});
-}
-
 static void register_roguelike_systems(flecs::world &ecs)
 {
   ecs.system<PlayerInput, Action, const IsPlayer>()
@@ -124,6 +164,7 @@ static void register_roguelike_systems(flecs::world &ecs)
       bool right = IsKeyDown(KEY_RIGHT);
       bool up = IsKeyDown(KEY_UP);
       bool down = IsKeyDown(KEY_DOWN);
+      bool skip = IsKeyDown(KEY_ENTER);
       if (left && !inp.left)
         a.action = EA_MOVE_LEFT;
       if (right && !inp.right)
@@ -132,10 +173,13 @@ static void register_roguelike_systems(flecs::world &ecs)
         a.action = EA_MOVE_UP;
       if (down && !inp.down)
         a.action = EA_MOVE_DOWN;
+      if (skip && !inp.skip)
+        a.action = EA_MOVE_SKIP;
       inp.left = left;
       inp.right = right;
       inp.up = up;
       inp.down = down;
+      inp.skip = skip;
     });
   ecs.system<const Position, const Color>()
     .term<TextureSource>(flecs::Wildcard).not_()
@@ -178,6 +222,7 @@ void init_roguelike(flecs::world &ecs)
   create_minotaur_beh(create_monster(ecs, -5, 5, Color{0, 255, 0, 255}, "minotaur_tex"));
   
   create_gatherer_beh(create_gatherer(ecs, -3, 3, Color{255, 255, 255, 255}, "swordsman_tex"), ecs);
+  create_guard_beh(create_guard(ecs, 3, 3, Color{0, 255, 0, 255}, "swordsman_tex", {{}, {3, 3}}), ecs);
 
   create_player(ecs, 0, 0, "swordsman_tex");
 

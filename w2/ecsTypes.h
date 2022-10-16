@@ -1,5 +1,6 @@
 #pragma once
 
+#include "flecs/addons/cpp/entity.hpp"
 struct Position;
 struct MovePos;
 
@@ -59,6 +60,7 @@ enum Actions
   EA_MOVE_RIGHT,
   EA_MOVE_DOWN,
   EA_MOVE_UP,
+  EA_MOVE_SKIP,
   EA_MOVE_END,
   EA_ATTACK = EA_MOVE_END,
   EA_NUM
@@ -96,12 +98,21 @@ struct PlayerInput
   bool right = false;
   bool up = false;
   bool down = false;
+  bool skip = false;
 };
 
 struct Symbol
 {
   char symb;
 };
+
+template<typename T>
+struct EcsContainer{
+  T value;
+};
+
+struct CurrentWaypoint : public EcsContainer<flecs::entity> {};
+struct NextWaypoint : public EcsContainer<flecs::entity> {};
 
 struct IsPlayer {};
 struct CanPickup {};

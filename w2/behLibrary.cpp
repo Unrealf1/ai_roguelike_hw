@@ -266,6 +266,33 @@ struct FindEnemy : public BehNode
   }
 };
 
+struct FindWaypoint : public BehNode
+{
+  size_t entityBb = size_t(-1);
+  FindWaypoint(flecs::entity entity, const char *bb_name)
+  {
+    entityBb = reg_entity_blackboard_var<flecs::entity>(entity, bb_name);
+  }
+
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+    auto res = BEH_FAIL;
+    entity.set([&](const Position &pos, CurrentWaypoint& waypoint)
+    {
+      waypoint.value.get([&](const Position& wpos, const NextWaypoint& next_waypoint){
+        if (pos.x == wpos.x && pos.y == wpos.y) {
+          waypoint.value = next_waypoint.value;
+        }
+      });
+      if (ecs.is_valid(waypoint.value)) {
+        res = BEH_SUCCESS;
+        bb.set<flecs::entity>(entityBb, waypoint.value);
+      }
+    });
+    return res;
+  }
+};
+
 struct Flee : public BehNode
 {
   size_t entityBb = size_t(-1);
@@ -368,6 +395,11 @@ BehNode *is_low_hp(float thres)
 BehNode *find_enemy(flecs::entity entity, float dist, const char *bb_name)
 {
   return new FindEnemy(entity, dist, bb_name);
+}
+
+BehNode *find_waypoint(flecs::entity entity, const char *bb_name)
+{
+  return new FindWaypoint(entity, bb_name);
 }
 
 BehNode *find_powerup(const flecs::world& ecs, flecs::entity entity, float dist, const char *bb_name)

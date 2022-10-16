@@ -26,6 +26,7 @@ BehNode *or_node(const std::vector<BehNode*> &nodes);
 BehNode *move_to_entity(flecs::entity entity, const char *bb_name);
 BehNode *is_low_hp(float thres);
 BehNode *find_heal(const flecs::world& ecs, flecs::entity entity, float dist, const char *bb_name);
+BehNode *find_waypoint(flecs::entity entity, const char *bb_name);
 BehNode *find_powerup(const flecs::world& ecs, flecs::entity entity, float dist, const char *bb_name);
 BehNode *find_enemy(flecs::entity entity, float dist, const char *bb_name);
 BehNode *flee(flecs::entity entity, const char *bb_name);
