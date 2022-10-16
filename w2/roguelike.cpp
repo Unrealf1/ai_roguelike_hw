@@ -122,9 +122,9 @@ void init_roguelike(flecs::world &ecs)
   register_roguelike_systems(ecs);
 
   ecs.entity("swordsman_tex")
-    .set(Texture2D{LoadTexture("assets/swordsman.png")});
+    .set(Texture2D{LoadTexture("w2/assets/swordsman.png")});
   ecs.entity("minotaur_tex")
-    .set(Texture2D{LoadTexture("assets/minotaur.png")});
+    .set(Texture2D{LoadTexture("w2/assets/minotaur.png")});
 
   ecs.observer<Texture2D>()
     .event(flecs::OnRemove)

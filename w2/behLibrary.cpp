@@ -4,6 +4,8 @@
 #include "math.h"
 #include "raylib.h"
 #include "blackboard.h"
+#include <algorithm>
+#include <array>
 
 struct CompoundNode : public BehNode
 {
@@ -23,6 +25,18 @@ struct CompoundNode : public BehNode
   }
 };
 
+template<size_t Arity>
+struct FixedArityCompoundNode : public BehNode
+{
+public:
+  FixedArityCompoundNode(std::array<std::unique_ptr<BehNode>, Arity>&& nodes) : m_children(std::move(nodes)) {}
+protected:
+  std::array<std::unique_ptr<BehNode>, Arity> m_children;
+};
+
+// Run all children one by one
+// fail on first fail
+// success on all success
 struct Sequence : public CompoundNode
 {
   BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
@@ -37,6 +51,9 @@ struct Sequence : public CompoundNode
   }
 };
 
+// Run all children one by one
+// fail on all fail
+// success on first success
 struct Selector : public CompoundNode
 {
   BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
@@ -48,6 +65,66 @@ struct Selector : public CompoundNode
         return res;
     }
     return BEH_FAIL;
+  }
+};
+
+// Run all children one by one
+// fail on all fail
+// success on any success
+struct Or : public CompoundNode
+{
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+    bool anySuccess = false;
+    for (BehNode *node : nodes)
+    {
+      BehResult res = node->update(ecs, entity, bb);
+      if (res == BEH_SUCCESS) {
+        anySuccess = true;
+      } else if (res == BEH_RUNNING) {
+        return res;
+      }
+    }
+    return anySuccess ? BEH_SUCCESS : BEH_FAIL;
+  }
+};
+
+// Run all children at once
+// running while any of the children running
+// success on all success; fail on any fail
+struct Parallel : public CompoundNode
+{
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+    bool allSuccess = true;
+    bool allFinished = true;
+    for (BehNode *node : nodes)
+    {
+      BehResult res = node->update(ecs, entity, bb);
+      
+      if (res == BEH_FAIL) {
+        allSuccess = false;
+      } else if (res == BEH_RUNNING) {
+        allFinished = false;
+      }
+    }
+    return !allFinished 
+            ? BEH_RUNNING 
+            : allSuccess 
+              ? BEH_SUCCESS 
+              : BEH_FAIL;
+  }
+};
+
+struct Not : public FixedArityCompoundNode<1> {
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override {
+    auto res = m_children.front()->update(ecs, entity, bb);
+    if (res == BEH_FAIL) {
+        return BEH_SUCCESS;
+    } else if (res == BEH_SUCCESS) {
+        return BEH_FAIL;
+    } 
+    return res;
   }
 };
 

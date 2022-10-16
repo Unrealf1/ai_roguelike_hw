@@ -1,5 +1,6 @@
 // initial skeleton is a clone from https://github.com/jpcy/bgfx-minimal-example
 //
+#include <algorithm>
 #include "raylib.h"
 #include <flecs.h>
 #include "ecsTypes.h"
