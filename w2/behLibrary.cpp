@@ -7,6 +7,8 @@
 #include "blackboard.h"
 #include <algorithm>
 #include <array>
+#include <iostream>
+
 
 struct CompoundNode : public BehNode
 {
@@ -27,6 +29,11 @@ struct CompoundNode : public BehNode
     nodes.push_back(node);
     return *this;
   }
+  void react(flecs::world &ecs, flecs::entity entity, Blackboard & bb, Event event) override {
+    for (auto& node : nodes) {
+        node->react(ecs, entity, bb, event);
+    }
+  }
 };
 
 template<size_t Arity>
@@ -34,6 +41,11 @@ struct FixedArityCompoundNode : public BehNode
 {
 public:
   FixedArityCompoundNode(std::array<std::unique_ptr<BehNode>, Arity>&& nodes) : m_children(std::move(nodes)) {}
+  void react(flecs::world &ecs, flecs::entity entity, Blackboard & bb, Event event) override {
+    for (auto& node : m_children) {
+        node->react(ecs, entity, bb, event);
+    }
+  }
 protected:
   std::array<std::unique_ptr<BehNode>, Arity> m_children;
 };
@@ -350,6 +362,80 @@ struct Patrol : public BehNode
   }
 };
 
+struct HoardListener : public BehNode
+{
+  size_t target_index = size_t(-1);
+  size_t flag_index = size_t(-1);
+  HoardListener(flecs::entity entity, const char *bb_name)
+  {
+    target_index = reg_entity_blackboard_var<flecs::entity>(entity, bb_name);
+    flag_index = reg_entity_blackboard_var<bool>(entity, bb_name);
+    entity.set([&](Blackboard &bb)
+    {
+      bb.set<bool>(flag_index, false);
+    });
+  }
+
+  BehResult update(flecs::world &, flecs::entity, Blackboard &) override
+  {
+      return BEH_FAIL;
+  }
+  void react(flecs::world &, flecs::entity entity, Blackboard &, Event event) override {
+    if (event.type == EventType::HoardAlert) {
+        entity.set([&](Blackboard &bb)
+        {
+          std::cout << "setting hoard target" << std::endl;
+          bb.set<bool>(flag_index, true);
+          bb.set<flecs::entity>(target_index, *static_cast<flecs::entity*>(event.custom_data));
+        });
+    }
+  }
+};
+
+struct AlertHoard : public BehNode
+{
+  float m_alert_dist;
+  size_t m_bb_index;
+  AlertHoard(flecs::entity entity, float alert_dist, const char *bb_name)
+    : m_alert_dist(alert_dist)
+  {
+    m_bb_index = reg_entity_blackboard_var<flecs::entity>(entity, bb_name);
+  }
+
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+      auto enemy = bb.get<flecs::entity>(m_bb_index);
+      if (!ecs.is_valid(enemy)) {
+        return BEH_FAIL;
+      }
+      size_t alert_num = 0;
+      auto hasBehTree = ecs.query<const Position, BehaviourTree>();
+      entity.get([&](const Position& e_pos){
+          hasBehTree.each([&](const Position& pos, BehaviourTree& beh_tree) {
+            if (m_alert_dist >= dist(e_pos, pos)) {
+                ++alert_num;
+                beh_tree.event(ecs, entity, bb, {
+                    EventType::HoardAlert,
+                    &enemy        
+                });
+            }
+          });
+      });
+      std::cout << "alerting hoard(" << alert_num << ") alerted" << std::endl;
+      return BEH_SUCCESS;
+  }
+};
+
+
+BehNode *hoard_listener(flecs::entity entity, const char *bb_name)
+{
+    return new HoardListener(entity, bb_name);
+}
+
+BehNode *alert_hoard(flecs::entity entity, float dist, const char *bb_name)
+{
+    return new AlertHoard(entity, dist, bb_name);
+}
 
 BehNode *sequence(const std::vector<BehNode*> &nodes)
 {

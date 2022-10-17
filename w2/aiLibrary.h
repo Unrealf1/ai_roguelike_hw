@@ -30,5 +30,7 @@ BehNode *find_waypoint(flecs::entity entity, const char *bb_name);
 BehNode *find_powerup(const flecs::world& ecs, flecs::entity entity, float dist, const char *bb_name);
 BehNode *find_enemy(flecs::entity entity, float dist, const char *bb_name);
 BehNode *flee(flecs::entity entity, const char *bb_name);
+BehNode *alert_hoard(flecs::entity entity, float dist, const char *bb_name);
+BehNode *hoard_listener(flecs::entity entity, const char *bb_name);
 BehNode *patrol(flecs::entity entity, float patrol_dist, const char *bb_name);
 

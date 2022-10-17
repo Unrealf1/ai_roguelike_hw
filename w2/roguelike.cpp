@@ -48,7 +48,23 @@ static void create_gatherer_beh(flecs::entity e, const flecs::world& ecs)
     }) // root selector
   });
 }
-static void create_guard_beh(flecs::entity e, const flecs::world& ecs)
+
+static void create_hoard_beh(flecs::entity e)
+{
+  e.set(Blackboard{});
+  e.set(BehaviourTree{
+    selector({
+        hoard_listener(e, "hoard provoker"),
+        move_to_entity(e, "hoard provoker"),
+        sequence({
+            find_enemy(e, 2.0f, "hoard provoker"),
+            alert_hoard(e, 100.0f, "hoard provoker")
+        }),
+        patrol(e, 2.f, "patrol_pos")
+    }), // root selector
+  });
+}
+static void create_guard_beh(flecs::entity e, const flecs::world&)
 {
   e.set(Blackboard{});
   e.set(BehaviourTree{
@@ -208,6 +224,12 @@ void init_roguelike(flecs::world &ecs)
     .set(Texture2D{LoadTexture("w2/assets/swordsman.png")});
   ecs.entity("minotaur_tex")
     .set(Texture2D{LoadTexture("w2/assets/minotaur.png")});
+  ecs.entity("cow1_tex")
+    .set(Texture2D{LoadTexture("w2/assets/cow1.png")});
+  ecs.entity("cow2_tex")
+    .set(Texture2D{LoadTexture("w2/assets/cow2.png")});
+  ecs.entity("cow3_tex")
+    .set(Texture2D{LoadTexture("w2/assets/cow3.png")});
 
   ecs.observer<Texture2D>()
     .event(flecs::OnRemove)
@@ -217,12 +239,16 @@ void init_roguelike(flecs::world &ecs)
       });
 
   create_minotaur_beh(create_monster(ecs, 5, 5, Color{0xee, 0x00, 0xee, 0xff}, "minotaur_tex"));
-  create_minotaur_beh(create_monster(ecs, 10, -5, Color{0xee, 0x00, 0xee, 0xff}, "minotaur_tex"));
-  create_minotaur_beh(create_monster(ecs, -5, -5, Color{0x11, 0x11, 0x11, 0xff}, "minotaur_tex"));
+  //create_minotaur_beh(create_monster(ecs, 10, -5, Color{0xee, 0x00, 0xee, 0xff}, "minotaur_tex"));
+  //create_minotaur_beh(create_monster(ecs, -5, -5, Color{0x11, 0x11, 0x11, 0xff}, "minotaur_tex"));
   create_minotaur_beh(create_monster(ecs, -5, 5, Color{0, 255, 0, 255}, "minotaur_tex"));
   
   create_gatherer_beh(create_gatherer(ecs, -3, 3, Color{255, 255, 255, 255}, "swordsman_tex"), ecs);
   create_guard_beh(create_guard(ecs, 3, 3, Color{0, 255, 0, 255}, "swordsman_tex", {{}, {3, 3}}), ecs);
+  create_hoard_beh(create_monster(ecs, 10, 0, Color{0, 255, 0, 255}, "cow1_tex"));
+  create_hoard_beh(create_monster(ecs, 12, 2, Color{0, 255, 0, 255}, "cow2_tex"));
+  create_hoard_beh(create_monster(ecs, 10, 4, Color{0, 255, 0, 255}, "cow3_tex"));
+  create_hoard_beh(create_monster(ecs, 12, 6, Color{0, 255, 0, 255}, "cow1_tex"));
 
   create_player(ecs, 0, 0, "swordsman_tex");
 

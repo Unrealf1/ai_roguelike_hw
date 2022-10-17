@@ -38,6 +38,7 @@ private:
 
 class Blackboard : public NamedDataPool<float>,
                    public NamedDataPool<int>,
+                   public NamedDataPool<bool>,
                    public NamedDataPool<flecs::entity>,
                    public NamedDataPool<Position>
 {
