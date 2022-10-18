@@ -166,6 +166,7 @@ struct MoveToEntity : public BehNode
         res = BEH_FAIL;
         return;
       }
+
       targetEntity.get([&](const Position &target_pos)
       {
         if (pos != target_pos)
@@ -380,14 +381,11 @@ struct HoardListener : public BehNode
   {
       return BEH_FAIL;
   }
-  void react(flecs::world &, flecs::entity entity, Blackboard &, Event event) override {
+  void react(flecs::world &, flecs::entity, Blackboard &bb, Event event) override {
     if (event.type == EventType::HoardAlert) {
-        entity.set([&](Blackboard &bb)
-        {
-          std::cout << "setting hoard target" << std::endl;
-          bb.set<bool>(flag_index, true);
-          bb.set<flecs::entity>(target_index, *static_cast<flecs::entity*>(event.custom_data));
-        });
+      std::cout << "setting hoard target" << std::endl;
+      bb.set<bool>(flag_index, true);
+      bb.set<flecs::entity>(target_index, *static_cast<flecs::entity*>(event.custom_data));
     }
   }
 };
@@ -405,23 +403,23 @@ struct AlertHoard : public BehNode
   BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
   {
       auto enemy = bb.get<flecs::entity>(m_bb_index);
-      if (!ecs.is_valid(enemy)) {
+      if (!ecs.is_valid(enemy) || !enemy.is_alive()) {
         return BEH_FAIL;
       }
       size_t alert_num = 0;
-      auto hasBehTree = ecs.query<const Position, BehaviourTree>();
+      auto hasBehTree = ecs.query<const Position, BehaviourTree, Blackboard>();
       entity.get([&](const Position& e_pos){
-          hasBehTree.each([&](const Position& pos, BehaviourTree& beh_tree) {
+          hasBehTree.each([&](flecs::entity e,const Position& pos, BehaviourTree& beh_tree, Blackboard& other_bb) {
             if (m_alert_dist >= dist(e_pos, pos)) {
                 ++alert_num;
-                beh_tree.event(ecs, entity, bb, {
+                beh_tree.event(ecs, e, other_bb, {
                     EventType::HoardAlert,
                     &enemy        
                 });
             }
           });
       });
-      std::cout << "alerting hoard(" << alert_num << ") alerted" << std::endl;
+      std::cout << "alerting hoard... (" << alert_num << ") alerted" << std::endl;
       return BEH_SUCCESS;
   }
 };

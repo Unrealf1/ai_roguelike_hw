@@ -245,12 +245,19 @@ void init_roguelike(flecs::world &ecs)
   
   create_gatherer_beh(create_gatherer(ecs, -3, 3, Color{255, 255, 255, 255}, "swordsman_tex"), ecs);
   create_guard_beh(create_guard(ecs, 3, 3, Color{0, 255, 0, 255}, "swordsman_tex", {{}, {3, 3}}), ecs);
+
   create_hoard_beh(create_monster(ecs, 10, 0, Color{0, 255, 0, 255}, "cow1_tex"));
   create_hoard_beh(create_monster(ecs, 12, 2, Color{0, 255, 0, 255}, "cow2_tex"));
   create_hoard_beh(create_monster(ecs, 10, 4, Color{0, 255, 0, 255}, "cow3_tex"));
   create_hoard_beh(create_monster(ecs, 12, 6, Color{0, 255, 0, 255}, "cow1_tex"));
 
+  create_hoard_beh(create_monster(ecs, -10, 0, Color{0, 255, 0, 255}, "cow2_tex"));
+  create_hoard_beh(create_monster(ecs, -12, 2, Color{0, 255, 0, 255}, "cow3_tex"));
+  create_hoard_beh(create_monster(ecs, -10, 4, Color{0, 255, 0, 255}, "cow1_tex"));
+  create_hoard_beh(create_monster(ecs, -12, 6, Color{0, 255, 0, 255}, "cow2_tex"));
+
   create_player(ecs, 0, 0, "swordsman_tex");
+
 
   create_powerup(ecs, 7, 7, 10.f);
   create_powerup(ecs, 10, -6, 10.f);
