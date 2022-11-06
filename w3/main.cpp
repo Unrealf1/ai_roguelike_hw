@@ -11,22 +11,22 @@ static void update_camera(Camera2D &cam, flecs::world &ecs)
 
   playerQuery.each([&](const Position &pos, const IsPlayer &)
   {
-    cam.target.x = pos.x;
-    cam.target.y = pos.y;
+    cam.target.x = float(pos.x);
+    cam.target.y = float(pos.y);
   });
 }
 
 int main(int /*argc*/, const char ** /*argv*/)
 {
-  int width = 1920;
-  int height = 1080;
+  int width = 1000;
+  int height = 620;
   InitWindow(width, height, "w3 AI MIPT");
 
   const int scrWidth = GetMonitorWidth(0);
   const int scrHeight = GetMonitorHeight(0);
   if (scrWidth < width || scrHeight < height)
   {
-    width = std::min(scrWidth, width);
+    width = std::min(scrWidth, width) / 3 * 2;
     height = std::min(scrHeight - 150, height);
     SetWindowSize(width, height);
   }

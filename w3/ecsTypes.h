@@ -6,6 +6,8 @@
 struct Position;
 struct MovePos;
 
+struct ExplorerBase {};
+
 struct MovePos
 {
   int x = 0;

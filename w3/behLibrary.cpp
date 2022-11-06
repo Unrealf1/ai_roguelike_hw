@@ -5,6 +5,10 @@
 #include "raylib.h"
 #include "blackboard.h"
 #include <algorithm>
+#include "randomUtil.hpp"
+#include <iterator>
+#include <ranges>
+#include <iostream>
 
 struct CompoundNode : public BehNode
 {
@@ -54,27 +58,53 @@ struct Selector : public CompoundNode
 
 struct UtilitySelector : public BehNode
 {
-  std::vector<std::pair<BehNode*, utility_function>> utilityNodes;
+  std::vector<std::tuple<BehNode*, utility_function, std::string>> utilityNodes;
+  BehNode* last_choice = nullptr;
+  float stale = 0;
+  const float base_chill = 100.0f;
 
   BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
   {
-    std::vector<std::pair<float, size_t>> utilityScores;
-    for (size_t i = 0; i < utilityNodes.size(); ++i)
-    {
-      const float utilityScore = utilityNodes[i].second(bb);
-      utilityScores.push_back(std::make_pair(utilityScore, i));
+    auto copy = utilityNodes; // needed to handle choice without repeats
+    while (!copy.empty()) {
+        float chill = std::max(0.0f, base_chill - stale);
+        auto scores = copy 
+            | std::views::transform([&](auto& tuple) {
+                    auto& [node, function, _] = tuple;
+                    return std::max(function(bb) + (last_choice == node ? chill : 0.0f), 0.0f);
+              });
+        auto sample = rnd::sample(rnd::get_engine(), copy, scores);
+        auto chosen = sample.front();
+
+        auto last_iter = std::ranges::find_if(copy, [&] (const auto& tuple) { 
+                return std::get<0>(tuple) == last_choice;
+        });
+        auto chosen_node = std::get<0>(*chosen);
+        for (size_t i = 0; i < scores.size(); ++i) {
+            std::string additional;
+            if (i == (chosen - copy.begin())) {
+                additional += " (chosen)";
+            }
+            if (i == (last_iter - copy.begin())) {
+                additional += " (last)";
+            }
+            std::cout << std::get<2>(copy[i]) << ": " << scores[i] << additional << '\n';
+        }
+        std::cout << std::endl;
+        auto res = chosen_node->update(ecs, entity, bb);
+        if (res != BEH_FAIL) {
+            if (last_choice != chosen_node) {
+                stale = 0;
+                last_choice = chosen_node;
+            } else {
+                ++stale;
+            }
+            return res;
+        }
+
+        copy.erase(chosen);
     }
-    std::sort(utilityScores.begin(), utilityScores.end(), [](auto &lhs, auto &rhs)
-    {
-      return lhs.first > rhs.first;
-    });
-    for (const std::pair<float, size_t> &node : utilityScores)
-    {
-      size_t nodeIdx = node.second;
-      BehResult res = utilityNodes[nodeIdx].first->update(ecs, entity, bb);
-      if (res != BEH_FAIL)
-        return res;
-    }
+    last_choice = nullptr;
     return BEH_FAIL;
   }
 };
@@ -224,6 +254,17 @@ struct Patrol : public BehNode
     return res;
   }
 };
+struct RandomWalk : public BehNode
+{
+  BehResult update(flecs::world &, flecs::entity entity, Blackboard &) override
+  {
+    entity.set([&](Action &a)
+    {
+        a.action = GetRandomValue(EA_MOVE_START, EA_MOVE_END - 1); // do a random walk
+    });
+    return BehResult::BEH_RUNNING;
+  }
+};
 
 struct PatchUp : public BehNode
 {
@@ -262,10 +303,10 @@ BehNode *selector(const std::vector<BehNode*> &nodes)
   return sel;
 }
 
-BehNode *utility_selector(const std::vector<std::pair<BehNode*, utility_function>> &nodes)
+BehNode *utility_selector(const std::vector<std::tuple<BehNode*, utility_function, std::string>> &nodes)
 {
   UtilitySelector *usel = new UtilitySelector;
-  usel->utilityNodes = std::move(nodes);
+  usel->utilityNodes = nodes;
   return usel;
 }
 
@@ -299,4 +340,6 @@ BehNode *patch_up(float thres)
   return new PatchUp(thres);
 }
 
-
+BehNode *random_walk() {
+    return new RandomWalk();
+}
