@@ -47,17 +47,14 @@ static void create_explorer_beh(flecs::entity e, flecs::entity base)
         }),
         [](Blackboard &bb) {
             float base_dist = bb.get<float>("baseDist");
-            return 6.0f / (base_dist + 1.0f);
+            return 6.0f / (base_dist + 1.0f); // if no enemies are here, sequence will fail
         },
         "defend base"
       },
       {
-        sequence({
-            find_enemy(e, 4.f, "enemy"),
-            move_to_entity(e, "explorerBase")
-        }),
+        move_to_entity(e, "explorerBase"),
         [](Blackboard &bb) {
-            return bb.get<float>("baseDist") / 10.f;
+            return bb.get<float>("baseDist") / 8.f * (bb.get<float>("enemyDist") < 4.f);
         },
         "flee to base"
       }

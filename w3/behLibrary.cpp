@@ -80,19 +80,19 @@ struct UtilitySelector : public BehNode
                 return std::get<0>(tuple) == last_choice;
         });
         auto chosen_node = std::get<0>(*chosen);
-        for (size_t i = 0; i < scores.size(); ++i) {
-            std::string additional;
-            if (i == (chosen - copy.begin())) {
-                additional += " (chosen)";
-            }
-            if (i == (last_iter - copy.begin())) {
-                additional += " (last)";
-            }
-            std::cout << std::get<2>(copy[i]) << ": " << scores[i] << additional << '\n';
-        }
-        std::cout << std::endl;
         auto res = chosen_node->update(ecs, entity, bb);
         if (res != BEH_FAIL) {
+            for (size_t i = 0; i < scores.size(); ++i) {
+                std::string additional;
+                if (i == (chosen - copy.begin())) {
+                    additional += " (chosen)";
+                }
+                if (i == (last_iter - copy.begin())) {
+                    additional += " (last)";
+                }
+                std::cout << std::get<2>(copy[i]) << ": " << scores[i] << additional << '\n';
+            }
+            std::cout << std::endl;
             if (last_choice != chosen_node) {
                 stale = 0;
                 last_choice = chosen_node;
