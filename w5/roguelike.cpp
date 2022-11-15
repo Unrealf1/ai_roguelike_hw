@@ -131,9 +131,9 @@ void init_roguelike(flecs::world &ecs)
   register_roguelike_systems(ecs);
 
   ecs.entity("swordsman_tex")
-    .set(Texture2D{LoadTexture("assets/swordsman.png")});
+    .set(Texture2D{LoadTexture("w5/assets/swordsman.png")});
   ecs.entity("minotaur_tex")
-    .set(Texture2D{LoadTexture("assets/minotaur.png")});
+    .set(Texture2D{LoadTexture("w5/assets/minotaur.png")});
 
   ecs.observer<Texture2D>()
     .event(flecs::OnRemove)
@@ -146,6 +146,7 @@ void init_roguelike(flecs::world &ecs)
   create_hive_monster(create_monster(ecs, Color{0xee, 0x00, 0xee, 0xff}, "minotaur_tex"));
   create_hive_monster(create_monster(ecs, Color{0x11, 0x11, 0x11, 0xff}, "minotaur_tex"));
   create_hive(create_player_fleer(create_monster(ecs, Color{0, 255, 0, 255}, "minotaur_tex")));
+  create_archer(create_monster(ecs, Color{0, 255, 0, 255}, "swordsman_tex"));
 
   create_player(ecs, "swordsman_tex");
 
@@ -157,9 +158,9 @@ void init_roguelike(flecs::world &ecs)
 void init_dungeon(flecs::world &ecs, char *tiles, size_t w, size_t h)
 {
   flecs::entity wallTex = ecs.entity("wall_tex")
-    .set(Texture2D{LoadTexture("assets/wall.png")});
+    .set(Texture2D{LoadTexture("w5/assets/wall.png")});
   flecs::entity floorTex = ecs.entity("floor_tex")
-    .set(Texture2D{LoadTexture("assets/floor.png")});
+    .set(Texture2D{LoadTexture("w5/assets/floor.png")});
 
   std::vector<char> dungeonData;
   dungeonData.resize(w * h);
@@ -237,9 +238,42 @@ static void process_actions(flecs::world &ecs)
   static auto processActions = ecs.query<Action, Position, MovePos, const MeleeDamage, const Team>();
   static auto processHeals = ecs.query<Action, Hitpoints>();
   static auto checkAttacks = ecs.query<const MovePos, Hitpoints, const Team>();
+  static auto checkShoots = ecs.query<const Position, const Team, const Action, const RangedAttack>();
+  static auto damageable = ecs.query<const Position, const Team, Hitpoints>();
+  static auto dungeonDataQuery = ecs.query<const DungeonData>();
   // Process all actions
   ecs.defer([&]
   {
+    checkShoots.each([&](const Position& pos, const Team& team, const Action& a, const RangedAttack& atk) {
+        if (a.action != EA_NOP) {
+            return;
+        }
+        bool did_shoot = false;
+        for (int dx = -atk.range; dx < atk.range; ++dx) {
+            for (int dy = -atk.range; dy < atk.range; ++dy) {
+                if (did_shoot) {
+                    return;
+                }
+                Position cur = {pos.x + dx, pos.y + dy};
+                damageable.each([&](const Position& other_pos, const Team& other_team, Hitpoints& hp){
+                    if (other_pos != cur || team.team == other_team.team) {
+                        return;
+                    }
+                    dungeonDataQuery.each([&](const DungeonData& dd) {
+                        Position dir = {-sgn(dx), -sgn(dy)};
+                        while (cur != pos) {
+                            if (dd.tiles[cur.y * dd.width + cur.x] != dungeon::floor) {
+                                return;
+                            }
+                            cur = Position{cur.x + dir.x, cur.y + dir.y};
+                        }
+                        did_shoot = true;
+                        hp.hitpoints -= atk.damage;
+                    });
+                });
+            }
+        }
+    });
     processHeals.each([&](Action &a, Hitpoints &hp)
     {
       if (a.action != EA_HEAL_SELF)
@@ -390,16 +424,29 @@ void process_turn(flecs::world &ecs)
     dmaps::gen_player_flee_map(ecs, fleeMap);
     ecs.entity("flee_map")
       .set(DijkstraMapData{fleeMap});
+      //.add<VisualiseMap>();
 
     std::vector<float> hiveMap;
     dmaps::gen_hive_pack_map(ecs, hiveMap);
     ecs.entity("hive_map")
       .set(DijkstraMapData{hiveMap});
 
+    std::vector<float> visibilityMap;
+    dmaps::gen_player_visibility_map(ecs, visibilityMap);
+    ecs.entity("player_visibility")
+      .set(DijkstraMapData{visibilityMap});
+      //.add<VisualiseMap>();
+
+    std::vector<float> nearMap;
+    dmaps::gen_player_near_map(ecs, nearMap, 4);
+    ecs.entity("player_near")
+      .set(DijkstraMapData{nearMap})
+      .add<VisualiseMap>();
+
     //ecs.entity("flee_map").add<VisualiseMap>();
     ecs.entity("hive_follower_sum")
-      .set(DmapWeights{{{"hive_map", {1.f, 1.f}}, {"approach_map", {1.8f, 0.8f}}}})
-      .add<VisualiseMap>();
+      .set(DmapWeights{{{"hive_map", {1.f, 1.f}}, {"approach_map", {1.8f, 0.8f}}}});
+      //.add<VisualiseMap>();
   }
 }
 

@@ -66,6 +66,72 @@ static void process_dmap(std::vector<float> &map, const DungeonData &dd)
   }
 }
 
+void dmaps::gen_player_near_map(flecs::world &ecs, std::vector<float> &map, int quad_size)
+{
+  query_dungeon_data(ecs, [&](const DungeonData &dd)
+  {
+    init_tiles(map, dd);
+    query_characters_positions(ecs, [&](const Position &pos, const Team &t)
+    {
+      if (t.team == 0){
+        auto halfsize = quad_size;
+        for (int x = -halfsize; x <= halfsize; ++x) {
+            for (int y = -halfsize; y <= halfsize; ++y) {
+                Position cur = {pos.x + x, pos.y + y};
+                if (cur.x < 0 || cur.x >= dd.width 
+                        || cur.y < 0 || cur.y >= dd.height
+                        || dd.tiles[cur.y * dd.width + cur.x] != dungeon::floor) {
+                    continue;
+                }
+                map[cur.y * dd.width + cur.x] = halfsize - std::max(std::abs(x), std::abs(y));
+            }
+        }   
+      }
+    });
+  });
+}
+void dmaps::gen_player_visibility_map(flecs::world &ecs, std::vector<float> &map)
+{
+  query_dungeon_data(ecs, [&](const DungeonData &dd)
+  {
+    init_tiles(map, dd);
+    query_characters_positions(ecs, [&](const Position &pos, const Team &t)
+    {
+      if (t.team == 0){
+        for (int x = 0; x < dd.width; ++x) {
+            for (int y = 0; y < dd.height; ++y) {
+                if (dd.tiles[y * dd.width + x] == dungeon::floor) {
+                    std::vector<Position> directions = {
+                        {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
+                    };
+                    for (const auto& dir : directions) {
+                        Position cur = {x, y};
+                        auto diff = pos - cur;
+                        if (sgn(diff.x) != sgn(dir.x) || sgn(diff.y) != sgn(dir.y)) {
+                            continue;
+                        }
+                        bool correct = true;
+                        while (cur.x >= 0 && cur.x < dd.width
+                                && cur.y >= 0 && cur.y < dd.width
+                                && cur != pos) {
+                            cur = Position{cur.x + dir.x, cur.y + dir.y};
+                            if (dd.tiles[cur.y * dd.width + cur.x] != dungeon::floor) {
+                                correct = false;
+                                break;
+                            }
+                        }
+                        if (correct) {
+                            map[y * dd.width + x] = 1.0f;
+                        }
+                    }
+                } 
+            }
+        }   
+      }
+    });
+  });
+}
+
 void dmaps::gen_player_approach_map(flecs::world &ecs, std::vector<float> &map)
 {
   query_dungeon_data(ecs, [&](const DungeonData &dd)

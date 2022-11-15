@@ -13,6 +13,17 @@ flecs::entity create_player_fleer(flecs::entity e)
   return e;
 }
 
+flecs::entity create_archer(flecs::entity e)
+{
+  e.set(DmapWeights{{
+          {"player_near", {1.f, 1.f}},
+          {"gen_player_visibility", {2.f, 1.f}},
+          {"approach_map", {0.1f, 1.f}}
+  }});
+  e.set(RangedAttack{4, 10});
+  return e;
+}
+
 flecs::entity create_hive_follower(flecs::entity e)
 {
   e.set(DmapWeights{{{"hive_map", {1.f, 1.f}}}});
